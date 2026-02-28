@@ -65,6 +65,7 @@ int   cockpit_window_limit = 0;
 
 extern void save_png(GLint texId, const char* output_name);
 
+static void load_settings();
 
 
 // Assume base is correct, need to find search with a fuzzy case insensitive match
@@ -311,6 +312,7 @@ char _g_window_name[COCKPIT_MAX_WINDOWS][256];  // titles of each window
 int _g_texture_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 
 bool decorateWindows = true;
+bool stealthWindows = false;
 
 static int	coord_in_rect(int x, int y, int * bounds_lbrt)  { return ((x >= bounds_lbrt[0]) && (x < bounds_lbrt[2]) && (y < bounds_lbrt[3]) && (y >= bounds_lbrt[1])); }
 
@@ -340,6 +342,11 @@ PLUGIN_API int XPluginStart(
 		log_printf("The XPLMGetPluginInfo returned did not contain " PATH_SEP_STR "64" PATH_SEP_STR "win.xpl as expected [%s]\n", plugin_path);
 	}
 	strcat(plugin_path, PATH_SEP_STR "..");
+
+	load_settings();
+    if (stealthWindows) {
+        decorateWindows = false;
+    }
 
 	strcpy(outName, "XTextureExtractorPlugin");
 	strcpy(outSig, "net.waynepiekarski.windowcockpitplugin");
@@ -481,6 +488,28 @@ void save_png(GLint texId, const char* output_name = "texture_save.png")
 	}
 }
 
+static void load_settings()
+{
+    char cfg[SAFE_PATH_LENGTH];
+    sprintf(cfg, "%s%cXTextureExtractor.ini", plugin_path, PATH_SEP_CHR);
+
+    FILE *fp = fopen(cfg, "rb");
+    if (fp == NULL) {
+        return; // default behaviour (stealthWindows stays false)
+    }
+
+    char line[256];
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        if (line[0] == '#' || line[0] == ';') continue;
+
+        int v;
+        if (sscanf(line, "stealth=%d", &v) == 1) {
+            stealthWindows = (v != 0);
+        }
+    }
+
+    fclose(fp);
+}
 
 // (0,0) is in the bottom-left, top>bottom, right>left, and +Y is upwards
 void draw_texture_lbrt(int leftX, int botY, int rightX, int topY, int maxX, int maxY, int l, int b, int r, int t) {
@@ -840,38 +869,48 @@ void load_window_state() {
 		XPLMSetWindowPositioningMode(g_window[i], xplm_WindowPositionFree, -1);
 		XPLMSetWindowGravity(g_window[i], 0, 1, 0, 1); // As the X-Plane window resizes, keep our size constant, and our left and top edges in the same place relative to the window's left/top
 													   // XPLMSetWindowResizingLimits(g_window[i], 200, 200, 1000, 1000); // Limit resizing our window: maintain a minimum width/height of 200 boxels and a max width/height of 500
+
+		if (stealthWindows) {
+            // Park tiny windows in the bottom-left corner of the global desktop
+            int sl = global_desktop_bounds[0] + 2;
+            int sb = global_desktop_bounds[1] + 2;
+            int sr = sl + 2;
+            int st = sb + 2;
+            XPLMSetWindowGeometry(g_window[i], sl, st, sr, sb);
+        }
+
 		char winname[1024];
 		sprintf(winname, "XTextureExtractor: %s", _g_window_name[i]);
 		XPLMSetWindowTitle(g_window[i], winname);
 	}
 
-
-	// Configure the window based on a local configuration file (if present)
-	char filename[SAFE_PATH_LENGTH];
-	sprintf(filename, "windowcockpit-%s.txt", cockpit_aircraft_name);
-	fp = fopen(filename, "rb");
-	if (fp == NULL) {
-		log_printf("Could not load from file %s\n", filename);
-		return;
-	} else {
-		log_printf("Loading XTextureExtractor state from %s\n", filename);
-	}
-	for (intptr_t i = 0; i < COCKPIT_MAX_WINDOWS; i++) {
-		int is_popped_out, l, t, r, b;
-		if (fscanf(fp, "%d %d %d %d %d", &is_popped_out, &l, &t, &r, &b) != 5) {
-			log_printf("Reached EOF from file %s\n", filename);
-			break;
-		}
-		log_printf("Read from file Pop=%d L=%d T=%d R=%d B=%d\n", is_popped_out, l, t, r, b);
-		XPLMSetWindowPositioningMode(g_window[i], is_popped_out ? xplm_WindowPopOut : xplm_WindowPositionFree, 0);
-		if (is_popped_out)
-			XPLMSetWindowGeometryOS(g_window[i], l, t, r, b);
-		else
-			XPLMSetWindowGeometry(g_window[i], l, t, r, b);
-	}
-	fclose(fp);
+    if (!stealthWindows) {
+        // Configure the window based on a local configuration file (if present)
+        char filename[SAFE_PATH_LENGTH];
+        sprintf(filename, "windowcockpit-%s.txt", cockpit_aircraft_name);
+        fp = fopen(filename, "rb");
+        if (fp == NULL) {
+            log_printf("Could not load from file %s\n", filename);
+            return;
+        } else {
+            log_printf("Loading XTextureExtractor state from %s\n", filename);
+        }
+        for (intptr_t i = 0; i < COCKPIT_MAX_WINDOWS; i++) {
+            int is_popped_out, l, t, r, b;
+            if (fscanf(fp, "%d %d %d %d %d", &is_popped_out, &l, &t, &r, &b) != 5) {
+                log_printf("Reached EOF from file %s\n", filename);
+                break;
+            }
+            log_printf("Read from file Pop=%d L=%d T=%d R=%d B=%d\n", is_popped_out, l, t, r, b);
+            XPLMSetWindowPositioningMode(g_window[i], is_popped_out ? xplm_WindowPopOut : xplm_WindowPositionFree, 0);
+            if (is_popped_out)
+                XPLMSetWindowGeometryOS(g_window[i], l, t, r, b);
+            else
+                XPLMSetWindowGeometry(g_window[i], l, t, r, b);
+        }
+        fclose(fp);
+    }
 }
-
 
 int	handle_mouse(XPLMWindowID in_window_id, int x, int y, XPLMMouseStatus is_down, void * in_refcon)
 {
