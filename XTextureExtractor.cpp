@@ -269,10 +269,13 @@ int panel_callback(XPLMDrawingPhase inPhase, int inIsBefore, void *inRefcon)
 					network_started = true;
 				}
 
+				free(texture_temp);
 				return 1;
 			}
 		}
 	}
+
+	free(texture_temp);
 	cockpit_texture_id = 0;
 	log_printf("Did not find matching texture, using id 0 instead\n");
 	return 1;
