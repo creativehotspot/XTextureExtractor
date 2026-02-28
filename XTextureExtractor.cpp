@@ -37,7 +37,7 @@ GLint cockpit_texture_id = 0;
 GLint cockpit_texture_width = -1;
 GLint cockpit_texture_height = -1;
 GLint cockpit_texture_format = -1;
-GLint cockpit_texture_last = 3000; // This is the starting point for our texture search, it needs to be higher than any texture id and I can't query for it
+GLint cockpit_texture_last = 10000; // This is the starting point for our texture search, it needs to be higher than any texture id and I can't query for it
 GLint cockpit_texture_jump = 1000; // Whenever the aircraft switches, bump up the last texture id, because this plugin seems to cause texture ids to exceed, not sure what the limit is here
 int   cockpit_texture_seq = -1;     // Increment this each time we change aircraft or textures, so we can restart the network connection
 int   cockpit_texture_draw = 0;     // Number of times the active texture has been drawn
@@ -960,3 +960,4 @@ int handle_command(XPLMCommandRef cmd_id, XPLMCommandPhase phase, void * in_refc
 	}
 	return 1;
 }
+
